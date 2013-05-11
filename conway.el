@@ -5,14 +5,11 @@
 (defun cell-y (c) (cdr c))
 
 (defun cell-neighbors (cell)
-  (let (neighbors)
-    (dolist (x-offset '(-1 0 1))
-      (dolist (y-offset '(-1 0 1))
-        (let ((new-cell (cell (- (cell-x cell) x-offset)
-                              (- (cell-y cell) y-offset))))
-          (when (not (equal new-cell cell))
-            (add-to-list 'neighbors new-cell)))))
-    neighbors))
+  (remove cell
+          (mapcan (lambda (new-x)
+                    (mapcar (lambda (new-y) (cell new-x new-y))
+                            (number-sequence (1- (cell-y cell)) (1+ (cell-y cell)))))
+                  (number-sequence (1- (cell-x cell)) (1+ (cell-x cell))))))
 
 (defun board (cells) cells)
 
@@ -38,15 +35,25 @@
       (setq min-y (if (or (not min-y) (> min-y (cell-y cell))) (cell-y cell) min-y)))
     `(:max-x ,max-x :min-x ,min-x :max-y ,max-y :min-y ,min-y)))
 
+(defun cell-neighbors (cell)
+  (delete cell
+          (mapcan (lambda (new-x)
+                    (mapcar (lambda (new-y) (cell new-x new-y))
+                            (number-sequence (1- (cell-y cell)) (1+ (cell-y cell)))))
+                  (number-sequence (1- (cell-x cell)) (1+ (cell-x cell))))))
+
 (defun board-tick (board)
-  (let ((limits (board-limits board))
-        next-cells)
-    (dolist (iter-y (number-sequence (1- (plist-get limits :min-y)) (1+ (plist-get limits :max-y))))
-      (dolist (iter-x (number-sequence (1- (plist-get limits :min-x)) (1+ (plist-get limits :max-x))))
-        (let ((next-cell (cell iter-x iter-y)))
-          (when (board-cell-will-live-p board next-cell)
-            (setq next-cells (cons next-cell next-cells))))))
-    (board (reverse next-cells))))
+  (board
+   (remove nil
+           (let ((limits (board-limits board)))
+             (mapcan (lambda (iter-y)
+                       (mapcar (lambda (iter-x)
+                                 (if (board-cell-will-live-p board (cell iter-x iter-y))
+                                     (cell iter-x iter-y)
+                                   nil))
+                               (number-sequence (1- (plist-get limits :min-x)) (1+ (plist-get limits :max-x)))))
+                     (number-sequence (1- (plist-get limits :min-y)) (1+ (plist-get limits :max-y))))))))
+
 
 (defun board-to-string (board)
   (let ((limits (board-limits board)) (str ""))
