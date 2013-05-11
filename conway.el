@@ -14,14 +14,10 @@
             (add-to-list 'neighbors new-cell)))))
     neighbors))
 
-
 (defun board (cells) cells)
 
 (defun board-living-cell-p (board x y)
-  (when board
-    (let ((next-cell (car board)))
-      (or (and (equal x (cell-x next-cell)) (equal y (cell-y next-cell)))
-          (board-living-cell-p (cdr board) x y)))))
+  (member (cell x y) board))
 
 (defun board-cell-will-live-p (board cell)
   (let ((living-neighbor-count 0))
@@ -33,37 +29,34 @@
           (board-living-cell-p board (cell-x cell) (cell-y cell)))
      (equal 3 living-neighbor-count))))
 
-(defun board-cells-max (board comparator accessor)
-  (let (max)
+(defun board-limits (board)
+  (let (max-x min-x max-y min-y)
     (dolist (cell board)
-      (when (or (not max)
-                (funcall comparator (funcall accessor cell) max))
-        (setq max (funcall accessor cell))))
-    max))
-
-(defun board-max-x (board) (board-cells-max board '> 'cell-x))
-(defun board-max-y (board) (board-cells-max board '> 'cell-y))
-(defun board-min-x (board) (board-cells-max board '< 'cell-x))
-(defun board-min-y (board) (board-cells-max board '< 'cell-y))
+      (setq max-x (if (or (not max-x) (< max-x (cell-x cell))) (cell-x cell) max-x))
+      (setq min-x (if (or (not min-x) (> min-x (cell-x cell))) (cell-x cell) min-x))
+      (setq max-y (if (or (not max-y) (< max-y (cell-y cell))) (cell-y cell) max-y))
+      (setq min-y (if (or (not min-y) (> min-y (cell-y cell))) (cell-y cell) min-y)))
+    `(:max-x ,max-x :min-x ,min-x :max-y ,max-y :min-y ,min-y)))
 
 (defun board-tick (board)
-  (let (next-cells)
-    (dolist (iter-y (number-sequence (1- (board-min-y board)) (1+ (board-max-y board))))
-      (dolist (iter-x (number-sequence (1- (board-min-x board)) (1+ (board-max-x board))))
+  (let ((limits (board-limits board))
+        next-cells)
+    (dolist (iter-y (number-sequence (1- (plist-get limits :min-y)) (1+ (plist-get limits :max-y))))
+      (dolist (iter-x (number-sequence (1- (plist-get limits :min-x)) (1+ (plist-get limits :max-x))))
         (let ((next-cell (cell iter-x iter-y)))
           (when (board-cell-will-live-p board next-cell)
             (setq next-cells (cons next-cell next-cells))))))
     (board (reverse next-cells))))
 
 (defun board-to-string (board)
-  (let ((str ""))
-    (dolist (iter-y (number-sequence (1- (board-min-y board)) (1+ (board-max-y board))))
-      (dolist (iter-x (number-sequence (1- (board-min-x board)) (1+ (board-max-x board))))
+  (let ((limits (board-limits board)) (str ""))
+    (dolist (iter-y (number-sequence (1- (plist-get limits :min-y)) (1+ (plist-get limits :max-y))))
+      (dolist (iter-x (number-sequence (1- (plist-get limits :min-x)) (1+ (plist-get limits :max-x))))
         (let ((next-cell (cell iter-x iter-y)))
           (if (board-living-cell-p board (cell-x next-cell) (cell-y next-cell))
-              (setq str (format "%so" str))
-            (setq str (format "%s " str)))))
-      (setq str (format "%s\n" str)))
+              (setq str (concat str "#"))
+            (setq str (concat str " ")))))
+      (setq str (concat str "\n")))
     str))
 
 (defun conways-game-of-life-tick (buf next-board)
@@ -71,15 +64,22 @@
     (erase-buffer)
     (insert (board-to-string next-board))
     (redisplay t)
-    (sleep-for 1)
-    (conways-game-of-life-tick buf (board-tick next-board))))
+    (run-with-timer 0.1 nil 'conways-game-of-life-tick buf (board-tick next-board))))
 
 (defun conways-game-of-life ()
   (interactive)
   (let* ((buf (generate-new-buffer "*conways-game-of-life"))
          (next-board (board (list
-                            (cell 0 0) (cell 1 0) (cell 2 0)
-                (cell -1 1) (cell 0 1) (cell 1 1)))))
+
+                             (cell 0 0)
+                                                (cell 2 1)
+                 (cell -1 2) (cell 0 2)                    (cell 3 2) (cell 4 2) (cell 5 2)
+                ;;             (cell 0 0) (cell 1 0) (cell 2 0)
+                ;; (cell -1 1) (cell 0 1) (cell 1 1)
+
+
+                ;;             (cell 0 4) (cell 1 4) (cell 2 4)
+))))
     (switch-to-buffer buf)
     (conways-game-of-life-tick buf next-board)))
 
@@ -95,13 +95,13 @@
                              (cell 0 0) (cell 1 0)
                              (cell 0 1) (cell 1 1)))))
     (cl-assert (equal "    
- oo 
- o  
+ ## 
+ #  
     
 " (board-to-string test-board)))
     (cl-assert (equal "    
- oo 
- oo 
+ ## 
+ ## 
     
 " (board-to-string next-board)))))
 
