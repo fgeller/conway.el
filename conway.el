@@ -66,6 +66,23 @@
       (setq str (format "%s\n" str)))
     str))
 
+(defun conways-game-of-life-tick (buf next-board)
+  (with-current-buffer buf
+    (erase-buffer)
+    (insert (board-to-string next-board))
+    (redisplay t)
+    (sleep-for 1)
+    (conways-game-of-life-tick buf (board-tick next-board))))
+
+(defun conways-game-of-life ()
+  (interactive)
+  (let* ((buf (generate-new-buffer "*conways-game-of-life"))
+         (next-board (board (list
+                            (cell 0 0) (cell 1 0) (cell 2 0)
+                (cell -1 1) (cell 0 1) (cell 1 1)))))
+    (switch-to-buffer buf)
+    (conways-game-of-life-tick buf next-board)))
+
 
 (ert-run-tests-interactively "^conway-test" " *ert conway-tests*")
 
