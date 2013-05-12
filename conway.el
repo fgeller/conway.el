@@ -1,3 +1,5 @@
+;; -*- c/should-cleanup-whitespace: nil -*-
+
 ;; let's play with TDD in elisp.
 
 (defun cell (x y) (cons x  y))
@@ -16,11 +18,16 @@
 (defun board-living-cell-p (board x y)
   (member (cell x y) board))
 
-(defun board-cell-will-live-p (board cell)
+(defun board-living-neighbor-count (board cell)
   (let ((living-neighbor-count 0))
-    (dolist (neighbor (cell-neighbors cell))
-      (when (board-living-cell-p board (cell-x neighbor) (cell-y neighbor))
-        (setq living-neighbor-count (1+ living-neighbor-count))))
+    (mapcar (lambda (neighbor)
+              (when (board-living-cell-p board (cell-x neighbor) (cell-y neighbor))
+                (setq living-neighbor-count (1+ living-neighbor-count))))
+            (cell-neighbors cell))
+    living-neighbor-count))
+
+(defun board-cell-will-live-p (board cell)
+  (let ((living-neighbor-count (board-living-neighbor-count board cell)))
     (or
      (and (equal 2 living-neighbor-count)
           (board-living-cell-p board (cell-x cell) (cell-y cell)))
@@ -28,11 +35,12 @@
 
 (defun board-limits (board)
   (let (max-x min-x max-y min-y)
-    (dolist (cell board)
-      (setq max-x (if (or (not max-x) (< max-x (cell-x cell))) (cell-x cell) max-x))
-      (setq min-x (if (or (not min-x) (> min-x (cell-x cell))) (cell-x cell) min-x))
-      (setq max-y (if (or (not max-y) (< max-y (cell-y cell))) (cell-y cell) max-y))
-      (setq min-y (if (or (not min-y) (> min-y (cell-y cell))) (cell-y cell) min-y)))
+    (mapc (lambda (cell)
+            (setq max-x (if (or (not max-x) (< max-x (cell-x cell))) (cell-x cell) max-x))
+            (setq min-x (if (or (not min-x) (> min-x (cell-x cell))) (cell-x cell) min-x))
+            (setq max-y (if (or (not max-y) (< max-y (cell-y cell))) (cell-y cell) max-y))
+            (setq min-y (if (or (not min-y) (> min-y (cell-y cell))) (cell-y cell) min-y)))
+          board)
     `(:max-x ,max-x :min-x ,min-x :max-y ,max-y :min-y ,min-y)))
 
 (defun cell-neighbors (cell)
@@ -54,17 +62,20 @@
                                (number-sequence (1- (plist-get limits :min-x)) (1+ (plist-get limits :max-x)))))
                      (number-sequence (1- (plist-get limits :min-y)) (1+ (plist-get limits :max-y))))))))
 
-
 (defun board-to-string (board)
-  (let ((limits (board-limits board)) (str ""))
-    (dolist (iter-y (number-sequence (1- (plist-get limits :min-y)) (1+ (plist-get limits :max-y))))
-      (dolist (iter-x (number-sequence (1- (plist-get limits :min-x)) (1+ (plist-get limits :max-x))))
-        (let ((next-cell (cell iter-x iter-y)))
-          (if (board-living-cell-p board (cell-x next-cell) (cell-y next-cell))
-              (setq str (concat str "#"))
-            (setq str (concat str " ")))))
-      (setq str (concat str "\n")))
-    str))
+  (let* ((limits (board-limits board))
+         (xs (number-sequence (1- (plist-get limits :min-x)) (1+ (plist-get limits :max-x))))
+         (ys (number-sequence (1- (plist-get limits :min-y)) (1+ (plist-get limits :max-y)))))
+    (apply 'concat
+     (mapcar (lambda (iter-y)
+               (apply 'concat
+                      (nconc
+                       (mapcar (lambda (iter-x)
+                                 (let ((next-cell (cell iter-x iter-y)))
+                                   (if (board-living-cell-p board (cell-x next-cell) (cell-y next-cell)) "#" " ")))
+                               xs)
+                       '("\n"))))
+             ys))))
 
 (defun conways-game-of-life-tick (buf next-board)
   (with-current-buffer buf
@@ -75,7 +86,7 @@
 
 (defun conways-game-of-life ()
   (interactive)
-  (let* ((buf (generate-new-buffer "*conways-game-of-life"))
+  (let* ((buf (generate-new-buffer "*conways-game-of-life*"))
          (next-board (board (list
 
                              (cell 0 0)
